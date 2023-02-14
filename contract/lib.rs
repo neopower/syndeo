@@ -19,29 +19,30 @@ mod syndeo {
 
     #[ink(storage)]
     pub struct Syndeo {
-        contributions: Mapping<AccountId, u64>,
+        points_by_recipient: Mapping<AccountId, u64>,
         recipients: Vec<AccountId>,
-        total_contributions: u64,
+        total_points: u64,
     }
 
     impl Syndeo {
         #[ink(constructor)]
         pub fn new() -> Self {
             Self {
-                contributions: Mapping::default(),
+                points_by_recipient: Mapping::default(),
                 recipients: Vec::new(),
-                total_contributions: 0,
+                total_points: 0,
             }
         }
 
         #[ink(message)]
-        pub fn contribute(&mut self, recipient: AccountId, amount: u64) {
+        pub fn award(&mut self, recipient: AccountId, amount: u64) {
             let sender = self.env().caller();
-            let mut balance = self.contributions.get(recipient).unwrap_or(0);
-            balance = balance.checked_add(amount).unwrap();
-            self.contributions.insert(recipient, &balance);
+            let mut recipient_points = self.points_by_recipient.get(recipient).unwrap_or(0);
+            recipient_points = recipient_points.checked_add(amount).unwrap();
+            self.points_by_recipient
+                .insert(recipient, &recipient_points);
 
-            self.total_contributions = self.total_contributions.checked_add(amount).unwrap();
+            self.total_points = self.total_points.checked_add(amount).unwrap();
 
             self.env().emit_event(Contribution {
                 sender,
@@ -60,13 +61,13 @@ mod syndeo {
         pub fn distribute_rewards(&mut self) {
             let total_reward: Balance = self.env().balance();
             for recipient in &self.recipients {
-                let recipient_points = self.contributions.get(recipient).unwrap();
+                let recipient_points = self.points_by_recipient.get(recipient).unwrap();
 
                 // ToDo: Check the math operation
                 let reward: Balance = (recipient_points as u128)
                     .checked_mul(total_reward)
                     .unwrap()
-                    .checked_div(self.total_contributions as u128)
+                    .checked_div(self.total_points as u128)
                     .unwrap();
 
                 // ToDo: Test the expect
@@ -75,7 +76,7 @@ mod syndeo {
                     .expect("failed to transfer tokens");
             }
 
-            self.clear_contributions();
+            self.reset_points();
         }
 
         #[ink(message)]
@@ -84,8 +85,8 @@ mod syndeo {
         }
 
         #[ink(message)]
-        pub fn get_total_contributions(&self) -> u64 {
-            self.total_contributions
+        pub fn get_total_points(&self) -> u64 {
+            self.total_points
         }
 
         #[ink(message)]
@@ -93,10 +94,10 @@ mod syndeo {
             self.recipients.len() as u64
         }
 
-        fn clear_contributions(&mut self) {
-            self.contributions = Mapping::default();
+        fn reset_points(&mut self) {
+            self.points_by_recipient = Mapping::default();
             self.recipients = Vec::new();
-            self.total_contributions = 0;
+            self.total_points = 0;
         }
     }
 }
