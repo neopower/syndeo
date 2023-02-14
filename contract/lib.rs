@@ -10,7 +10,17 @@ mod syndeo {
     pub enum ContractError {
         MemberAlreadyExists,
         MemberDoesNotExist,
+        AdminRequired,
         MaxPointsPerSenderCannotBeZero,
+        MaxPointsPerSenderExceeded,
+        CannotAwardYourself,
+        SenderIsNotMember,
+        RecipientIsNotMember,
+    }
+
+    #[ink(event)]
+    pub struct AdminChanged {
+        admin: AccountId,
     }
 
     #[ink(event)]
@@ -24,15 +34,10 @@ mod syndeo {
     }
 
     #[ink(event)]
-    pub struct Contribution {
+    pub struct Award {
         sender: AccountId,
         recipient: AccountId,
         amount: u64,
-    }
-
-    #[ink(event)]
-    pub struct NewRecipient {
-        recipient: AccountId,
     }
 
     #[ink(storage)]
@@ -40,6 +45,7 @@ mod syndeo {
         admin: AccountId,
         members: Vec<AccountId>,
         points_by_sender: Mapping<AccountId, u64>,
+        senders: Vec<AccountId>,
         points_by_recipient: Mapping<AccountId, u64>,
         recipients: Vec<AccountId>,
         total_points: u64,
@@ -49,10 +55,15 @@ mod syndeo {
     impl Syndeo {
         #[ink(constructor)]
         pub fn new(max_points_per_sender: Option<u64>) -> Self {
+            let caller = Self::env().caller();
+            let mut members = Vec::new();
+            members.push(caller);
+
             Self {
-                admin: Self::env().caller(),
-                members: Vec::new(),
+                admin: caller,
+                members,
                 points_by_sender: Mapping::default(),
+                senders: Vec::new(),
                 points_by_recipient: Mapping::default(),
                 recipients: Vec::new(),
                 total_points: 0,
@@ -60,9 +71,25 @@ mod syndeo {
             }
         }
 
-        // ONLY ADMIN
+        #[ink(message)]
+        pub fn set_admin(&mut self, new_admin: AccountId) -> Result<(), ContractError> {
+            self.check_admin()?;
+
+            if !self.is_member(&new_admin) {
+                self.add_member(new_admin)?;
+            }
+
+            self.admin = new_admin;
+
+            self.env().emit_event(AdminChanged { admin: new_admin });
+
+            Ok(())
+        }
+
         #[ink(message)]
         pub fn add_member(&mut self, new_member: AccountId) -> Result<(), ContractError> {
+            self.check_admin()?;
+
             if self.members.contains(&new_member) {
                 return Err(ContractError::MemberAlreadyExists);
             }
@@ -73,9 +100,10 @@ mod syndeo {
             Ok(())
         }
 
-        // ONLY ADMIN
         #[ink(message)]
         pub fn remove_member(&mut self, member_to_remove: AccountId) -> Result<(), ContractError> {
+            self.check_admin()?;
+
             match self.members.iter().position(|m| *m == member_to_remove) {
                 Some(member_index) => {
                     self.members.remove(member_index);
@@ -89,12 +117,13 @@ mod syndeo {
             Ok(())
         }
 
-        // ONLY ADMIN
         #[ink(message)]
         pub fn set_max_points_per_sender(
             &mut self,
             max_points_per_sender: u64,
         ) -> Result<(), ContractError> {
+            self.check_admin()?;
+
             if self.max_points_per_sender == 0 {
                 return Err(ContractError::MaxPointsPerSenderCannotBeZero);
             }
@@ -104,36 +133,53 @@ mod syndeo {
             Ok(())
         }
 
-        // ONLY MEMBERS (Sender & Recipient)
         #[ink(message)]
-        pub fn award(&mut self, recipient: AccountId, amount: u64) {
+        pub fn award(&mut self, recipient: AccountId, amount: u64) -> Result<(), ContractError> {
             let sender = self.env().caller();
-            let mut recipient_points = self.points_by_recipient.get(recipient).unwrap_or(0);
-            recipient_points = recipient_points.checked_add(amount).unwrap();
+
+            if sender == recipient {
+                return Err(ContractError::CannotAwardYourself);
+            }
+
+            self.check_sender_and_recipient(&sender, &recipient)?;
+
+            let sender_points = self.points_by_sender.get(sender).unwrap_or(0);
+            if sender_points.checked_add(amount).unwrap() > self.max_points_per_sender {
+                return Err(ContractError::MaxPointsPerSenderExceeded);
+            }
+            self.points_by_sender
+                .insert(sender, &(sender_points.checked_add(amount).unwrap()));
+
+            let recipient_points = self.points_by_recipient.get(recipient).unwrap_or(0);
             self.points_by_recipient
-                .insert(recipient, &recipient_points);
+                .insert(recipient, &(recipient_points.checked_add(amount).unwrap()));
 
             self.total_points = self.total_points.checked_add(amount).unwrap();
 
-            self.env().emit_event(Contribution {
+            self.env().emit_event(Award {
                 sender,
                 recipient,
                 amount,
             });
 
+            if !self.senders.contains(&sender) {
+                self.senders.push(sender);
+            }
+
             if !self.recipients.contains(&recipient) {
                 self.recipients.push(recipient);
-
-                self.env().emit_event(NewRecipient { recipient });
             }
+
+            Ok(())
         }
 
-        // ONLY ADMIN
         #[ink(message)]
-        pub fn distribute_rewards(&mut self) {
+        pub fn distribute_rewards(&mut self) -> Result<(), ContractError> {
+            self.check_admin()?;
+
             let total_reward: Balance = self.env().balance();
             for recipient in &self.recipients {
-                let recipient_points = self.points_by_recipient.get(recipient).unwrap();
+                let recipient_points = self.points_by_recipient.take(recipient).unwrap();
 
                 // ToDo: Check the math operation
                 let reward: Balance = (recipient_points as u128)
@@ -149,6 +195,8 @@ mod syndeo {
             }
 
             self.reset_points();
+
+            Ok(())
         }
 
         #[ink(message)]
@@ -166,10 +214,55 @@ mod syndeo {
             self.recipients.len() as u64
         }
 
+        #[ink(message)]
+        pub fn get_sender_available_points(&self) -> u64 {
+            let sender_points = self.points_by_sender.get(self.env().caller()).unwrap_or(0);
+            self.max_points_per_sender
+                .checked_sub(sender_points)
+                .unwrap_or(0)
+        }
+
+        #[ink(message)]
+        pub fn get_max_points_per_sender(&self) -> u64 {
+            self.max_points_per_sender
+        }
+
         fn reset_points(&mut self) {
-            self.points_by_recipient = Mapping::default();
+            for sender in &self.senders {
+                self.points_by_sender.remove(sender);
+            }
+
+            self.senders = Vec::new();
             self.recipients = Vec::new();
             self.total_points = 0;
+        }
+
+        fn check_admin(&self) -> Result<(), ContractError> {
+            if self.env().caller() != self.admin {
+                return Err(ContractError::AdminRequired);
+            }
+
+            Ok(())
+        }
+
+        fn check_sender_and_recipient(
+            &self,
+            sender: &AccountId,
+            recipient: &AccountId,
+        ) -> Result<(), ContractError> {
+            if !self.is_member(sender) {
+                return Err(ContractError::SenderIsNotMember);
+            }
+
+            if !self.is_member(recipient) {
+                return Err(ContractError::RecipientIsNotMember);
+            }
+
+            Ok(())
+        }
+
+        fn is_member(&self, account: &AccountId) -> bool {
+            self.members.contains(account)
         }
     }
 }

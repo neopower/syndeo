@@ -18,7 +18,6 @@ path = "lib.rs"
 default = ["std"]
 std = [
     "ink/std",
-    "ink_prelude/std",
     "scale/std",
     "scale-info/std",
 ]
