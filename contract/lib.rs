@@ -13,9 +13,19 @@ mod syndeo {
         AdminRequired,
         MaxPointsPerSenderCannotBeZero,
         MaxPointsPerSenderExceeded,
+        AwardPointsMustBeGreaterThanZero,
         CannotAwardYourself,
         SenderIsNotMember,
         RecipientIsNotMember,
+        NullFunds,
+    }
+
+    #[derive(PartialEq, Debug, Eq, Clone, scale::Encode, scale::Decode)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct RewardsSummary {
+        assigned_points: u64,
+        members_awarded: u64,
+        funds: Balance,
     }
 
     #[ink(event)]
@@ -38,6 +48,13 @@ mod syndeo {
         sender: AccountId,
         recipient: AccountId,
         amount: u64,
+    }
+
+    #[ink(event)]
+    pub struct RewardGranted {
+        recipient: AccountId,
+        reward: Balance,
+        points: u64,
     }
 
     #[ink(storage)]
@@ -135,20 +152,24 @@ mod syndeo {
 
         #[ink(message)]
         pub fn award(&mut self, recipient: AccountId, amount: u64) -> Result<(), ContractError> {
+            if amount == 0 {
+                return Err(ContractError::AwardPointsMustBeGreaterThanZero);
+            }
+
             let sender = self.env().caller();
 
             if sender == recipient {
                 return Err(ContractError::CannotAwardYourself);
             }
 
-            self.check_sender_and_recipient(&sender, &recipient)?;
+            self.check_valid_member(&sender, &recipient)?;
 
-            let sender_points = self.points_by_sender.get(sender).unwrap_or(0);
-            if sender_points.checked_add(amount).unwrap() > self.max_points_per_sender {
+            let sender_used_points = self.points_by_sender.get(sender).unwrap_or(0);
+            if sender_used_points.checked_add(amount).unwrap() > self.max_points_per_sender {
                 return Err(ContractError::MaxPointsPerSenderExceeded);
             }
             self.points_by_sender
-                .insert(sender, &(sender_points.checked_add(amount).unwrap()));
+                .insert(sender, &(sender_used_points.checked_add(amount).unwrap()));
 
             let recipient_points = self.points_by_recipient.get(recipient).unwrap_or(0);
             self.points_by_recipient
@@ -178,8 +199,14 @@ mod syndeo {
             self.check_admin()?;
 
             let total_reward: Balance = self.env().balance();
+
+            if total_reward == 0 {
+                return Err(ContractError::NullFunds);
+            }
+
             for recipient in &self.recipients {
-                let recipient_points = self.points_by_recipient.take(recipient).unwrap();
+                let recipient_points = self.points_by_recipient.get(recipient).unwrap();
+                self.points_by_recipient.remove(recipient);
 
                 // ToDo: Check the math operation
                 let reward: Balance = (recipient_points as u128)
@@ -192,6 +219,12 @@ mod syndeo {
                 self.env()
                     .transfer(*recipient, reward)
                     .expect("failed to transfer tokens");
+
+                self.env().emit_event(RewardGranted {
+                    recipient: *recipient,
+                    reward,
+                    points: recipient_points,
+                });
             }
 
             self.reset_points();
@@ -200,18 +233,12 @@ mod syndeo {
         }
 
         #[ink(message)]
-        pub fn get_funds(&self) -> Balance {
-            self.env().balance()
-        }
-
-        #[ink(message)]
-        pub fn get_total_points(&self) -> u64 {
-            self.total_points
-        }
-
-        #[ink(message)]
-        pub fn get_number_of_recipients(&self) -> u64 {
-            self.recipients.len() as u64
+        pub fn get_rewards_summary(&self) -> RewardsSummary {
+            RewardsSummary {
+                assigned_points: self.total_points,
+                members_awarded: self.recipients.len() as u64,
+                funds: self.env().balance(),
+            }
         }
 
         #[ink(message)]
@@ -245,7 +272,7 @@ mod syndeo {
             Ok(())
         }
 
-        fn check_sender_and_recipient(
+        fn check_valid_member(
             &self,
             sender: &AccountId,
             recipient: &AccountId,
