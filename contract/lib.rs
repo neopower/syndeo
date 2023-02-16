@@ -39,7 +39,7 @@ mod syndeo {
     pub struct Award {
         sender: AccountId,
         recipient: AccountId,
-        amount: u64,
+        points: u64,
     }
 
     #[ink(event)]
@@ -143,25 +143,27 @@ mod syndeo {
         }
 
         #[ink(message)]
-        pub fn award(&mut self, recipient: AccountId, amount: u64) -> Result<(), ContractError> {
+        pub fn award(&mut self, recipient: AccountId, points: u64) -> Result<(), ContractError> {
             let sender = self.env().caller();
-            self.validate_award_inputs(sender, recipient, amount)?;
+            self.validate_award_inputs(sender, recipient, points)?;
 
             let sender_used_points = self.points_by_sender.get(sender).unwrap_or(0);
-            self.validate_sender_points(sender_used_points, amount)?;
+            self.validate_sender_points(sender_used_points, points)?;
+            let sender_used_points_result = sender_used_points.checked_add(points).unwrap();
             self.points_by_sender
-                .insert(sender, &(sender_used_points.checked_add(amount).unwrap()));
+                .insert(sender, &sender_used_points_result);
 
             let recipient_points = self.points_by_recipient.get(recipient).unwrap_or(0);
+            let recipient_points_result = recipient_points.checked_add(points).unwrap();
             self.points_by_recipient
-                .insert(recipient, &(recipient_points.checked_add(amount).unwrap()));
+                .insert(recipient, &recipient_points_result);
 
-            self.total_points = self.total_points.checked_add(amount).unwrap();
+            self.total_points = self.total_points.checked_add(points).unwrap();
 
             self.env().emit_event(Award {
                 sender,
                 recipient,
-                amount,
+                points,
             });
 
             self.update_senders_and_recipients(sender, recipient);
@@ -170,12 +172,14 @@ mod syndeo {
         }
 
         #[ink(message)]
-        pub fn distribute_rewards(&mut self, amount: Option<Balance>) -> Result<(), ContractError> {
+        pub fn distribute_rewards(
+            &mut self,
+            amount_to_distribute: Option<Balance>,
+        ) -> Result<(), ContractError> {
             self.check_admin()?;
+            self.validate_recipients_exist()?;
 
-            let total_rewards = self.validate_reward(amount)?;
-
-            self.validate_rewards_recipients()?;
+            let total_rewards = self.validate_reward(amount_to_distribute)?;
 
             for recipient in &self.recipients {
                 let recipient_points = self.points_by_recipient.get(recipient).unwrap();
@@ -187,7 +191,6 @@ mod syndeo {
                     .checked_div(self.total_points as u128)
                     .unwrap();
 
-                // ToDo: Test the expect
                 self.env()
                     .transfer(*recipient, recipient_reward)
                     .expect("failed to transfer tokens");
@@ -202,29 +205,6 @@ mod syndeo {
             self.reset_points();
 
             Ok(())
-        }
-
-        pub fn validate_rewards_recipients(&self) -> Result<(), ContractError> {
-            if self.recipients.len() == 0 {
-                return Err(ContractError::NoRecipients);
-            }
-
-            Ok(())
-        }
-
-        pub fn validate_reward(&self, reward: Option<Balance>) -> Result<Balance, ContractError> {
-            let contract_balance = self.env().balance();
-            let reward: Balance = reward.unwrap_or(contract_balance);
-
-            if reward == 0 {
-                return Err(ContractError::NullFunds);
-            }
-
-            if reward > contract_balance {
-                return Err(ContractError::RewardExceedsContractBalance);
-            }
-
-            Ok(reward)
         }
 
         #[ink(message)]
@@ -288,6 +268,29 @@ mod syndeo {
             self.check_valid_member(&sender, &recipient)?;
 
             Ok(())
+        }
+
+        pub fn validate_recipients_exist(&self) -> Result<(), ContractError> {
+            if self.recipients.len() == 0 {
+                return Err(ContractError::NoRecipients);
+            }
+
+            Ok(())
+        }
+
+        pub fn validate_reward(&self, reward: Option<Balance>) -> Result<Balance, ContractError> {
+            let contract_balance = self.env().balance();
+            let reward: Balance = reward.unwrap_or(contract_balance);
+
+            if reward == 0 {
+                return Err(ContractError::NullFunds);
+            }
+
+            if reward > contract_balance {
+                return Err(ContractError::RewardExceedsContractBalance);
+            }
+
+            Ok(reward)
         }
 
         pub fn reset_points(&mut self) {

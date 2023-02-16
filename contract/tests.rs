@@ -105,7 +105,7 @@ fn award_works() {
 }
 
 #[ink::test]
-fn award_with_null_points_amount_fails_() {
+fn award_with_null_points_amount_fails() {
     // Arrange
     let (mut contract, accounts) = init(None);
     set_sender(accounts.alice);
@@ -134,7 +134,7 @@ fn award_with_same_sender_and_recipient_fails() {
 }
 
 #[ink::test]
-fn award_with_points_amount_exceeding_the_maximum() {
+fn award_with_points_amount_exceeding_the_maximum_fails() {
     // Arrange
     let (mut contract, accounts) = init(Some(5));
     set_sender(accounts.alice);
