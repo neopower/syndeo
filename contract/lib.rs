@@ -1,24 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod errors;
+
 #[ink::contract]
 mod syndeo {
+    use crate::errors::ContractError;
+
     use ink::storage::Mapping;
     use ink_prelude::vec::Vec;
-
-    #[derive(PartialEq, Debug, Eq, Clone, scale::Encode, scale::Decode)]
-    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
-    pub enum ContractError {
-        MemberAlreadyExists,
-        MemberDoesNotExist,
-        AdminRequired,
-        MaxPointsPerSenderCannotBeZero,
-        MaxPointsPerSenderExceeded,
-        AwardPointsMustBeGreaterThanZero,
-        CannotAwardYourself,
-        SenderIsNotMember,
-        RecipientIsNotMember,
-        NullFunds,
-    }
 
     #[derive(PartialEq, Debug, Eq, Clone, scale::Encode, scale::Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -152,22 +141,11 @@ mod syndeo {
 
         #[ink(message)]
         pub fn award(&mut self, recipient: AccountId, amount: u64) -> Result<(), ContractError> {
-            if amount == 0 {
-                return Err(ContractError::AwardPointsMustBeGreaterThanZero);
-            }
-
             let sender = self.env().caller();
-
-            if sender == recipient {
-                return Err(ContractError::CannotAwardYourself);
-            }
-
-            self.check_valid_member(&sender, &recipient)?;
+            self.validate_award_inputs(sender, recipient, amount)?;
 
             let sender_used_points = self.points_by_sender.get(sender).unwrap_or(0);
-            if sender_used_points.checked_add(amount).unwrap() > self.max_points_per_sender {
-                return Err(ContractError::MaxPointsPerSenderExceeded);
-            }
+            self.validate_sender_points(sender_used_points, amount)?;
             self.points_by_sender
                 .insert(sender, &(sender_used_points.checked_add(amount).unwrap()));
 
@@ -183,13 +161,7 @@ mod syndeo {
                 amount,
             });
 
-            if !self.senders.contains(&sender) {
-                self.senders.push(sender);
-            }
-
-            if !self.recipients.contains(&recipient) {
-                self.recipients.push(recipient);
-            }
+            self.update_senders_and_recipients(sender, recipient);
 
             Ok(())
         }
@@ -208,7 +180,6 @@ mod syndeo {
                 let recipient_points = self.points_by_recipient.get(recipient).unwrap();
                 self.points_by_recipient.remove(recipient);
 
-                // ToDo: Check the math operation
                 let reward: Balance = (recipient_points as u128)
                     .checked_mul(total_reward)
                     .unwrap()
@@ -252,6 +223,47 @@ mod syndeo {
         #[ink(message)]
         pub fn get_max_points_per_sender(&self) -> u64 {
             self.max_points_per_sender
+        }
+
+        fn validate_sender_points(
+            &self,
+            sender_used_points: u64,
+            new_amount: u64,
+        ) -> Result<(), ContractError> {
+            if sender_used_points.checked_add(new_amount).unwrap() > self.max_points_per_sender {
+                return Err(ContractError::MaxPointsPerSenderExceeded);
+            }
+
+            Ok(())
+        }
+
+        fn update_senders_and_recipients(&mut self, sender: AccountId, recipient: AccountId) {
+            if !self.senders.contains(&sender) {
+                self.senders.push(sender);
+            }
+
+            if !self.recipients.contains(&recipient) {
+                self.recipients.push(recipient);
+            }
+        }
+
+        fn validate_award_inputs(
+            &self,
+            sender: AccountId,
+            recipient: AccountId,
+            amount: u64,
+        ) -> Result<(), ContractError> {
+            if amount == 0 {
+                return Err(ContractError::AwardPointsMustBeGreaterThanZero);
+            }
+
+            if sender == recipient {
+                return Err(ContractError::CannotAwardYourself);
+            }
+
+            self.check_valid_member(&sender, &recipient)?;
+
+            Ok(())
         }
 
         fn reset_points(&mut self) {
