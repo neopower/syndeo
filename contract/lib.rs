@@ -2,6 +2,9 @@
 
 pub mod errors;
 
+#[cfg(test)]
+pub mod tests;
+
 #[ink::contract]
 mod syndeo {
     use crate::errors::ContractError;
@@ -48,14 +51,14 @@ mod syndeo {
 
     #[ink(storage)]
     pub struct Syndeo {
-        admin: AccountId,
-        members: Vec<AccountId>,
-        points_by_sender: Mapping<AccountId, u64>,
-        senders: Vec<AccountId>,
-        points_by_recipient: Mapping<AccountId, u64>,
-        recipients: Vec<AccountId>,
-        total_points: u64,
-        max_points_per_sender: u64,
+        pub admin: AccountId,
+        pub members: Vec<AccountId>,
+        pub points_by_sender: Mapping<AccountId, u64>,
+        pub senders: Vec<AccountId>,
+        pub points_by_recipient: Mapping<AccountId, u64>,
+        pub recipients: Vec<AccountId>,
+        pub total_points: u64,
+        pub max_points_per_sender: u64,
     }
 
     impl Syndeo {
@@ -167,33 +170,31 @@ mod syndeo {
         }
 
         #[ink(message)]
-        pub fn distribute_rewards(&mut self) -> Result<(), ContractError> {
+        pub fn distribute_rewards(&mut self, amount: Option<Balance>) -> Result<(), ContractError> {
             self.check_admin()?;
 
-            let total_reward: Balance = self.env().balance();
+            let total_rewards = self.validate_reward(amount)?;
 
-            if total_reward == 0 {
-                return Err(ContractError::NullFunds);
-            }
+            self.validate_rewards_recipients()?;
 
             for recipient in &self.recipients {
                 let recipient_points = self.points_by_recipient.get(recipient).unwrap();
                 self.points_by_recipient.remove(recipient);
 
-                let reward: Balance = (recipient_points as u128)
-                    .checked_mul(total_reward)
+                let recipient_reward: Balance = (recipient_points as u128)
+                    .checked_mul(total_rewards)
                     .unwrap()
                     .checked_div(self.total_points as u128)
                     .unwrap();
 
                 // ToDo: Test the expect
                 self.env()
-                    .transfer(*recipient, reward)
+                    .transfer(*recipient, recipient_reward)
                     .expect("failed to transfer tokens");
 
                 self.env().emit_event(RewardGranted {
                     recipient: *recipient,
-                    reward,
+                    reward: recipient_reward,
                     points: recipient_points,
                 });
             }
@@ -201,6 +202,29 @@ mod syndeo {
             self.reset_points();
 
             Ok(())
+        }
+
+        pub fn validate_rewards_recipients(&self) -> Result<(), ContractError> {
+            if self.recipients.len() == 0 {
+                return Err(ContractError::NoRecipients);
+            }
+
+            Ok(())
+        }
+
+        pub fn validate_reward(&self, reward: Option<Balance>) -> Result<Balance, ContractError> {
+            let contract_balance = self.env().balance();
+            let reward: Balance = reward.unwrap_or(contract_balance);
+
+            if reward == 0 {
+                return Err(ContractError::NullFunds);
+            }
+
+            if reward > contract_balance {
+                return Err(ContractError::RewardExceedsContractBalance);
+            }
+
+            Ok(reward)
         }
 
         #[ink(message)]
@@ -225,7 +249,7 @@ mod syndeo {
             self.max_points_per_sender
         }
 
-        fn validate_sender_points(
+        pub fn validate_sender_points(
             &self,
             sender_used_points: u64,
             new_amount: u64,
@@ -237,7 +261,7 @@ mod syndeo {
             Ok(())
         }
 
-        fn update_senders_and_recipients(&mut self, sender: AccountId, recipient: AccountId) {
+        pub fn update_senders_and_recipients(&mut self, sender: AccountId, recipient: AccountId) {
             if !self.senders.contains(&sender) {
                 self.senders.push(sender);
             }
@@ -247,7 +271,7 @@ mod syndeo {
             }
         }
 
-        fn validate_award_inputs(
+        pub fn validate_award_inputs(
             &self,
             sender: AccountId,
             recipient: AccountId,
@@ -266,7 +290,7 @@ mod syndeo {
             Ok(())
         }
 
-        fn reset_points(&mut self) {
+        pub fn reset_points(&mut self) {
             for sender in &self.senders {
                 self.points_by_sender.remove(sender);
             }
@@ -276,7 +300,7 @@ mod syndeo {
             self.total_points = 0;
         }
 
-        fn check_admin(&self) -> Result<(), ContractError> {
+        pub fn check_admin(&self) -> Result<(), ContractError> {
             if self.env().caller() != self.admin {
                 return Err(ContractError::AdminRequired);
             }
@@ -284,7 +308,7 @@ mod syndeo {
             Ok(())
         }
 
-        fn check_valid_member(
+        pub fn check_valid_member(
             &self,
             sender: &AccountId,
             recipient: &AccountId,
@@ -300,7 +324,7 @@ mod syndeo {
             Ok(())
         }
 
-        fn is_member(&self, account: &AccountId) -> bool {
+        pub fn is_member(&self, account: &AccountId) -> bool {
             self.members.contains(account)
         }
     }

@@ -11,4 +11,6 @@ pub enum ContractError {
     SenderIsNotMember,
     RecipientIsNotMember,
     NullFunds,
+    RewardExceedsContractBalance,
+    NoRecipients,
 }
