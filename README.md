@@ -13,6 +13,36 @@
 <p><i>member_points / total_points_awarded * total_funds = member_rewards</i></p>
 </div>
 
+## Demo
+
+The demo accounts can be imported using the JSON files inside the [demo](demo) folder. There are the admin and members accounts, which are already configured in the smart contract.
+
+The metadata to import the contract is [here](demo/syndeo_metadata.json).  
+
+### Rococo - Contracts
+- Smart Contract: `5DjomPLbA9N8WEtdYJxUb9Lka7WDsG7JcNJHBBQ9ZEKfbNv7`
+- Accounts
+  - Admin: `5CUcMabfoUT4f25cmtEyJpp9mBqyELaHxF3DoD5E1NXozM1r`
+  - Alice: `5FcGZy1do4cgSimy1JD1JQ3z2NrpMUd27jiKy2V5tmaqjaHy`
+  - Bob: `5Dsm7JND1gcLprCQowZyUBdAwg4stPpu1EirALJGx5LNQTro`
+  - Matt: `5GxUJ7CphAvAo5nmpvbCMYDnJ2LTa68hwnEkVd5iZnaoLz1c`
+
+### Shibuya
+- Smart Contract: `YxvbzzFgdirmQwbAvFfHiDgDe9H8UazJDMa2HJSFaYfpWE2`
+- Accounts
+  - Admin: `WMCnsZkai6Asr7TGBh6LUyRrEZ6CZH2ySYN2vH5sjXmacQP`
+  - Alice: `ZUs1FyiaJFnfYooVbf8L4DG7RZwKhKm8wDUCjgwm8aoKsr9`
+  - Bob: `XkMYbLHnvFT3gEFJF26VqnT2imzrcXe2SDzQ3W8pSLKzZwr`
+  - Matt: `aq4jQAuUQZH1upcKE3KPCP4P53aYJqSxyjtjLHaS9akvnhS`
+
+### Shiden
+- Smart Contract: `bFNGwRwVztSizW4JcmE8QRhAC1uKnaidrjuPzgqdASLZXXT`
+- Accounts
+  - Admin: `WMCnsZkai6Asr7TGBh6LUyRrEZ6CZH2ySYN2vH5sjXmacQP`
+  - Alice: `ZUs1FyiaJFnfYooVbf8L4DG7RZwKhKm8wDUCjgwm8aoKsr9`
+  - Bob: `XkMYbLHnvFT3gEFJF26VqnT2imzrcXe2SDzQ3W8pSLKzZwr`
+  - Matt: `aq4jQAuUQZH1upcKE3KPCP4P53aYJqSxyjtjLHaS9akvnhS`
+
 ## Environment setup
 
 To compile the smart contract, Rust and Cargo are required. Here is an [installation guide](https://doc.rust-lang.org/cargo/getting-started/installation.html).
