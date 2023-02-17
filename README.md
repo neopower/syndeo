@@ -17,7 +17,7 @@
 
 The demo accounts can be imported using the JSON files inside the [demo](demo) folder. There are the admin and members accounts, which are already configured in the smart contract.
 
-The metadata to import the contract is [here](demo/syndeo_metadata.json).  
+The metadata needed to import the contract is [here](demo/syndeo_metadata.json).  
 
 ### Rococo - Contracts
 - Smart Contract: `5DjomPLbA9N8WEtdYJxUb9Lka7WDsG7JcNJHBBQ9ZEKfbNv7`
