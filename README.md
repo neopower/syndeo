@@ -13,7 +13,7 @@
 <p><i>member_points / total_points_awarded * total_funds = member_rewards</i></p>
 </div>
 
-## Demo
+# Demo
 
 The demo accounts can be imported using the JSON files inside the [demo](demo) folder. There are the admin and members accounts, which are already configured in the smart contract.
 
@@ -42,6 +42,12 @@ The metadata needed to import the contract is [here](demo/syndeo_metadata.json).
   - Alice: `ZUs1FyiaJFnfYooVbf8L4DG7RZwKhKm8wDUCjgwm8aoKsr9`
   - Bob: `XkMYbLHnvFT3gEFJF26VqnT2imzrcXe2SDzQ3W8pSLKzZwr`
   - Matt: `aq4jQAuUQZH1upcKE3KPCP4P53aYJqSxyjtjLHaS9akvnhS`
+
+# Docs
+
+## UI
+
+The frontend code repository is **[here](https://github.com/NeoPower-Digital/syndeo-ui)** 
 
 ## Environment setup
 
