@@ -181,6 +181,7 @@ fn distribute_rewards_with_null_balance_fails() {
     let (mut contract, accounts) = init(None);
     set_sender(accounts.alice);
     set_balance(0);
+    contract.recipients.push(accounts.bob);
 
     // Act
     let result_fails = contract.distribute_rewards(None);
@@ -194,6 +195,7 @@ fn distribute_rewards_with_null_amount_input_fails() {
     // Arrange
     let (mut contract, accounts) = init(None);
     set_sender(accounts.alice);
+    contract.recipients.push(accounts.bob);
 
     // Act
     let result_fails = contract.distribute_rewards(Some(0));
