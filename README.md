@@ -8,8 +8,8 @@
 
 **Syndeo** is a decentralized platform that **motivates people to contribute to organizations by allowing members to award each other points**. The organization admins can then distribute treasury funds to members based on their points. This creates a **fair and transparent way to recognize people's contributions in organizations**, making the process **democratic and decentralized**.
 
-![Syndeo Diagram](https://user-images.githubusercontent.com/107150702/219654972-905bc61b-0daa-4001-85ab-9e3398a873b2.png)
 <div align="center">
+<img src="https://user-images.githubusercontent.com/107150702/219654972-905bc61b-0daa-4001-85ab-9e3398a873b2.png" width="60%" height="60%">
 <p><i>member_points / total_points_awarded * total_funds = member_rewards</i></p>
 </div>
 
